@@ -194,3 +194,7 @@ cython_debug/
 .cursorindexingignore
 sample_data_subset.csv
 sample_data_full.csv
+
+#files
+*.csv
+*.xlsx
