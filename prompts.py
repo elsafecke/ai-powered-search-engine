@@ -1,34 +1,26 @@
-query_prompt = """ You are given a user query. Historically, users had to manually write the specific search query syntax themselves and manaully select the filters they want to apply. Your job is to do this for them based on the query. 
+simple_search_prompt = """ You are given a user query. Historically, users had to manually write the specific search query syntax themselves and manaully select the filters they want to apply. Your job is to do this for them based on the query. 
 
-###Relevant schemas, fields, syntax guidance###
+###Distinct Values for Filters###
 
-Here are the list of document types you can filter for:
-
-
+<DocumentType>
 
 
-Here is the search syntax: 
+<LegalIssues>
 
 
+
+<Programs>
 
 
 
 ###Output Format Guidance###
-
-Structure your output in the following format:
-
-
+ly documenttext is searched, not commentary
+}
 
 
 ### Examples ###
 
-User: give me all documents that contain the words "global distribution system"
-Assistant: {
-<add search query and filters here>
 }
-
-
-
 
 
 
