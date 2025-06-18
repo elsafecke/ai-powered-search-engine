@@ -4,6 +4,7 @@ from azure.core.credentials import AzureKeyCredential
 from openai import AzureOpenAI
 from langchain_openai import AzureOpenAIEmbeddings
 from dotenv import load_dotenv
+from prompts import advanced_doc_search_prompt
 import os
 
 load_dotenv()
@@ -115,32 +116,7 @@ def generate_answer(user_question: str, search_results: list):
     """
     Generate an answer using o3-mini and search results.
     """
-    final_prompt = """Review the provided documents and commentary to answer the user's question.
-
-    ###Guidance###
-
-    1. From the list of provided documents, list out which are relevant to the user's question.
-    2. For each relevant document, explain how it addresses the user's question. Make sure to cite the document title and put the title in brackets. Always refer to the documents by [title], not by number.
-    3. If the commentary is relevant to the user's question, explain how it addresses the user's question. 
-    4. If there is no relevant information in the documents or commentary, say that you couldn't find any relevant information to answer the question. Under no circumstances should you answer with anything outside of the context of the search results. This is a legal search engine AI, accuracy is paramount. Do not make assumptions or inferences.
-    
-    ###Output Format###
-
-    - Always start your answer by identifying which documents you're referencing (e.g., "According to [Document Title]..."). 
-    - When referencing information, clearly indicate which document it came from
-    - Use the document titles provided in the TITLE sections to identify sources
-    - If information comes from multiple documents, mention all relevant sources
-    - Be specific about which document contains which information
-    - Summarize the expert commentary at the end if relevant to the user's question.
-
-    ###Examples###
-
-    User: can iranian origin banknotes be imported into the U.S?
-    Assistant: According to [Document Title], Iranian origin banknotes cannot be imported into the U.S. This is backed up by supporting information in [Document Title 2]. According to expert commentary, Iranian origin banknotes would require explicit authorization from OFAC.
-
-
-
-    """
+    final_prompt = advanced_doc_search_prompt
     
     # Format search results for the LLM with clear document separation
     formatted_results = []

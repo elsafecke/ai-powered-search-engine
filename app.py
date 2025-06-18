@@ -26,7 +26,7 @@ class Document(BaseModel):
     document_types: str
     settlement_amount: Any
     sanction_programs: str
-    industries: str
+    industries: str | None  # Allow None for missing values
     score: float
 
 class ChatResponse(BaseModel):

@@ -5,6 +5,7 @@ import sys
 import struct
 import pandas as pd
 from azure.identity import DefaultAzureCredential
+import time
 
 # Load environment variables from .env file
 from dotenv import load_dotenv
@@ -137,7 +138,8 @@ def create_or_truncate_table(cursor):
                 EnforcementCharacterizations NVARCHAR(MAX) NULL,
                 Industries NVARCHAR(MAX) NULL,
                 AggravatingFactors NVARCHAR(MAX) NULL,
-                MitigatingFactors NVARCHAR(MAX) NULL
+                MitigatingFactors NVARCHAR(MAX) NULL,
+                ReferenceCount INT NULL
             )
         ''')
 
@@ -174,18 +176,31 @@ def prepare_batch_data(headers, rows):
         batch_rows.append(filtered_row)
     return filtered_headers, batch_rows
 
-def batch_insert(cursor, headers, batch_rows):
-    """Insert multiple rows in a single batch"""
+def batch_insert_with_retry(cursor_factory, headers, batch_rows, max_retries=3, retry_delay=5):
+    """Insert multiple rows in a single batch with retry logic."""
     if not batch_rows:
         return
-    
     filtered_headers, processed_rows = prepare_batch_data(headers, batch_rows)
-    
     placeholders = ','.join(['?'] * len(filtered_headers))
     columns = ','.join(f'[{col}]' for col in filtered_headers)
     sql = f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})"
-    
-    cursor.executemany(sql, processed_rows)
+    attempt = 0
+    while attempt < max_retries:
+        try:
+            cursor = cursor_factory()
+            cursor.executemany(sql, processed_rows)
+            cursor.connection.commit()
+            return
+        except Exception as e:
+            attempt += 1
+            print(f"Batch insert failed (attempt {attempt}/{max_retries}): {e}")
+            if attempt >= max_retries:
+                print("Max retries reached. Skipping this batch.")
+                return
+            print(f"Retrying in {retry_delay} seconds...")
+            time.sleep(retry_delay)
+            # Reconnect for next attempt
+            cursor_factory(reconnect=True)
 
 def check_schema_simple(headers):
     expected = [
@@ -195,7 +210,7 @@ def check_schema_simple(headers):
         'StatutoryMaximum', 'VSD', 'Egregious', 'WillfulOrReckless', 'Criminal',
         'RegulatoryProvisions', 'LegalIssues', 'SanctionPrograms',
         'EnforcementCharacterizations', 'Industries', 'AggravatingFactors',
-        'MitigatingFactors'
+        'MitigatingFactors', 'ReferenceCount'
     ]
     if headers != expected:
         print("ERROR: Data file schema has changed (columns added, removed, renamed, or reordered). Please review your data file.")
@@ -232,6 +247,7 @@ def preflight_scan(headers, rows):
         'Industries': ('str', None),
         'AggravatingFactors': ('str', None),
         'MitigatingFactors': ('str', None),
+        'ReferenceCount': ('int', None)
     }
     import pandas as pd
     from datetime import datetime
@@ -335,80 +351,64 @@ def main():
         print("ERROR: Could not establish Azure AD connection")
         sys.exit(1)
     conn_str, token_struct = conn_info
-    
-    # Connect and import data
+
+    # Connection/cursor factory for retry logic
     conn = pyodbc.connect(conn_str, attrs_before={1256: token_struct})
+    def cursor_factory(reconnect=False):
+        nonlocal conn
+        if reconnect:
+            try:
+                conn.close()
+            except Exception:
+                pass
+            # Re-acquire token for reconnect
+            conn_info = create_connection_string_with_token()
+            if not conn_info:
+                raise Exception("Could not re-establish Azure AD connection")
+            new_conn_str, new_token_struct = conn_info
+            conn = pyodbc.connect(new_conn_str, attrs_before={1256: new_token_struct})
+        return conn.cursor()
+
     try:
-        cursor = conn.cursor()
+        cursor = cursor_factory()
         create_or_truncate_table(cursor)
         conn.commit()
-        
         # Import data in batches
         batch_size = 2000  # Process 2000 rows at a time
         batch_rows = []
         total_rows = 0
-        
         if FILE_NAME.lower().endswith('.csv'):
-            
             with open(FILE_NAME, encoding='utf-8') as csvfile:
                 reader = csv.reader(csvfile)
                 headers = next(reader)  # Get header
-                
                 for row in reader:
                     batch_rows.append(row)
                     total_rows += 1
-                    
                     if len(batch_rows) >= batch_size:
-                        try:
-                            batch_insert(cursor, headers, batch_rows)
-                            conn.commit()
-                            print(f"Processed {total_rows} rows...")
-                            batch_rows = []
-                        except Exception as e:
-                            print(f"Error inserting batch at row {total_rows}: {e}")
-                            batch_rows = []
-                
+                        batch_insert_with_retry(cursor_factory, headers, batch_rows)
+                        print(f"Processed {total_rows} rows...")
+                        batch_rows = []
                 if batch_rows:
-                    try:
-                        batch_insert(cursor, headers, batch_rows)
-                        conn.commit()
-                        print(f"Processed final {len(batch_rows)} rows...")
-                    except Exception as e:
-                        print(f"Error inserting final batch: {e}")
-        
+                    batch_insert_with_retry(cursor_factory, headers, batch_rows)
+                    print(f"Processed final {len(batch_rows)} rows...")
         elif FILE_NAME.lower().endswith('.xlsx'):
             df = pd.read_excel(FILE_NAME, engine='openpyxl')
             headers = list(df.columns)
             rows = df.values.tolist()
-            
             for row in rows:
                 batch_rows.append([str(cell) if pd.notnull(cell) else '' for cell in row])
                 total_rows += 1
-                
                 if len(batch_rows) >= batch_size:
-                    try:
-                        batch_insert(cursor, headers, batch_rows)
-                        conn.commit()
-                        print(f"Processed {total_rows} rows...")
-                        batch_rows = []
-                    except Exception as e:
-                        print(f"Error inserting batch at row {total_rows}: {e}")
-                        batch_rows = []
-            
+                    batch_insert_with_retry(cursor_factory, headers, batch_rows)
+                    print(f"Processed {total_rows} rows...")
+                    batch_rows = []
             if batch_rows:
-                try:
-                    batch_insert(cursor, headers, batch_rows)
-                    conn.commit()
-                    print(f"Processed final {len(batch_rows)} rows...")
-                except Exception as e:
-                    print(f"Error inserting final batch: {e}")
-        
+                batch_insert_with_retry(cursor_factory, headers, batch_rows)
+                print(f"Processed final {len(batch_rows)} rows...")
         else:
             print("ERROR: Only .csv and .xlsx files are supported for import")
             sys.exit(1)
-        
         print(f'Truncate and reload complete. Total rows loaded: {total_rows}')
-    
     finally:
         conn.close()
 

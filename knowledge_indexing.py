@@ -230,6 +230,7 @@ def create_index():
         SearchableField(name="Industries", type=SearchFieldDataType.String, filterable=True),
         SearchableField(name="AggravatingFactors", type=SearchFieldDataType.String, filterable=True),
         SearchableField(name="MitigatingFactors", type=SearchFieldDataType.String, filterable=True),
+        SimpleField(name="ReferenceCount", type=SearchFieldDataType.Int32, filterable=True, facetable=True)
     ]
 
     vector_search = VectorSearch(

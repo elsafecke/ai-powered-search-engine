@@ -198,3 +198,4 @@ sample_data_full.csv
 #files
 *.csv
 *.xlsx
+prompts.py

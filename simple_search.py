@@ -17,7 +17,7 @@ from prompts import simple_search_prompt
 load_dotenv()
 
 # Azure OpenAI configuration
-API_VERSION = "2024-08-01-preview"
+API_VERSION = "2024-12-01-preview" #2024-08-01-preview
 aoai_deployment = os.environ.get("AZURE_OPENAI_DEPLOYMENT")
 aoai_key = os.environ.get("AZURE_OPENAI_API_KEY")
 aoai_endpoint = os.environ.get("AZURE_OPENAI_ENDPOINT")
