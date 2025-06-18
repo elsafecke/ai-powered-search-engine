@@ -52,7 +52,7 @@ aoai_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
 conn_str_base = os.getenv('AZURE_SQL_CONNECTION_STRING')
 
 # Table configuration - update these as needed
-table_name = 'EnforcementActionsFull'
+table_name = 'EnforcementActionsFull2'
 
 # Initialize Azure clients
 search_index_client = SearchIndexClient(
@@ -230,6 +230,7 @@ def create_index():
         SearchableField(name="Industries", type=SearchFieldDataType.String, filterable=True),
         SearchableField(name="AggravatingFactors", type=SearchFieldDataType.String, filterable=True),
         SearchableField(name="MitigatingFactors", type=SearchFieldDataType.String, filterable=True),
+        SimpleField(name="ReferenceCount", type=SearchFieldDataType.Int32, filterable=True, facetable=True)
     ]
 
     vector_search = VectorSearch(
