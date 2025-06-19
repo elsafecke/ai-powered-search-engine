@@ -10,8 +10,15 @@ from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 import uvicorn
 
+
+# Initialize tracing first
+from tracing_setup import setup_tracing
+setup_tracing()
+
+
 # Import the orchestrator
 from orchestrator import process_query_with_routing
+
 
 app = FastAPI(
     title="Legal Search Engine API with Intelligent Routing",
@@ -33,7 +40,7 @@ class Document(BaseModel):
     document_types: str
     settlement_amount: Any
     sanction_programs: str
-    industries: str
+    industries: str | None
     score: float
 
 class QueryClassificationInfo(BaseModel):
