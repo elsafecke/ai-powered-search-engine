@@ -46,6 +46,7 @@ class QueryClassification(BaseModel):
     confidence: float  # 0.0 to 1.0
     reasoning: str
     clarification_question: Optional[str] = None
+    thread_id: Optional[str] = None
 
 # Orchestrator prompt for query classification (same as original)
 ORCHESTRATOR_PROMPT = """You are a query classification expert for a legal enforcement document search system. Your job is to analyze user questions and classify them into one of these categories:
@@ -155,7 +156,28 @@ class OrchestratorAgent:
         except Exception as e:
             print(f"❌ Failed to initialize OrchestratorAgent: {e}")
             raise
-    
+
+    def cleanup(self):
+        """
+        Clean up resources including the agent.
+        Should be called during application shutdown.
+        """
+        try:
+            print("🧹 Starting cleanup...")
+            
+            # Clean up the agent
+            if hasattr(self, 'agent') and self.agent:
+                try:
+                    print(f"🗑️ Cleaning up agent: {self.agent.id}")
+                    self.ai_client.agents.delete_agent(self.agent.id)
+                except Exception as agent_error:
+                    print(f"⚠️ Warning: Failed to cleanup agent: {agent_error}")
+            
+            print("✅ Cleanup completed successfully")
+            
+        except Exception as e:
+            print(f"❌ Error during cleanup: {e}")
+
     def _create_or_get_agent(self):
         """
         Create or retrieve the query classification agent.
@@ -204,7 +226,6 @@ class OrchestratorAgent:
                     thread = self.threads[thread_id]
                     print(f"✅ Using existing thread: {thread.id}")
                     return thread.id
-           
             # Create a new thread
             thread = self.ai_client.agents.threads.create()
             print(f"✅ Created new thread: {thread.id}")
@@ -280,6 +301,7 @@ class OrchestratorAgent:
             try:
                 classification_data = json.loads(response_content)
                 classification = QueryClassification(**classification_data)
+                classification.thread_id = thread_id 
             except (json.JSONDecodeError, ValueError) as e:
                 print(f"⚠️ Error parsing agent response as JSON: {e}")
                 print(f"Raw response: {response_content}")
@@ -287,17 +309,18 @@ class OrchestratorAgent:
                 classification = QueryClassification(
                     query_type=QueryType.ADVANCED_SEARCH,
                     confidence=0.5,
-                    reasoning="Error parsing agent response, defaulting to advanced search"
+                    reasoning="Error parsing agent response, defaulting to advanced search",
+                    thread_id=thread_id
                 )
             
             print(f"📊 Classification: {classification.query_type.value} (confidence: {classification.confidence:.2f})")
             print(f"💭 Reasoning: {classification.reasoning}")
             
             # Clean up thread
-            try:
-                self.ai_client.agents.threads.delete(thread_id=thread_id)
-            except Exception as cleanup_error:
-                print(f"⚠️ Warning: Failed to cleanup thread: {cleanup_error}")
+            # try:
+            #     self.ai_client.agents.threads.delete(thread_id=thread_id)
+            # except Exception as cleanup_error:
+            #     print(f"⚠️ Warning: Failed to cleanup thread: {cleanup_error}")
             
             return classification
             
@@ -342,7 +365,7 @@ class OrchestratorAgent:
             "answer": "I apologize, but I cannot process statistical queries yet. This feature is under development. Please try asking about specific documents, cases, or legal concepts instead."
         }
     
-    def process_query_with_routing(self, user_question: str) -> Dict[str, Any]:
+    async def process_query_with_routing(self, user_question: str) -> Dict[str, Any]:
         """
         Main orchestrator function that analyzes the query and routes to appropriate search method.
         
@@ -356,7 +379,7 @@ class OrchestratorAgent:
         print("="*60)
         
         # Step 1: Classify the query using Azure AI Foundry agent
-        classification = self.classify_query(user_question)
+        classification = await self.classify_query(user_question)
         
         # Step 2: Route to appropriate handler based on classification
         try:
@@ -434,6 +457,16 @@ def get_orchestrator() -> OrchestratorAgent:
         _orchestrator_instance = OrchestratorAgent()
     return _orchestrator_instance
 
+def cleanup_orchestrator():
+    """
+    Clean up the global orchestrator instance.
+    Should be called during application shutdown.
+    """
+    global _orchestrator_instance
+    if _orchestrator_instance is not None:
+        _orchestrator_instance.cleanup()
+        _orchestrator_instance = None
+
 async def classify_query(user_question: str) -> QueryClassification:
     """
     Convenience function for query classification using the global orchestrator.
@@ -447,7 +480,7 @@ async def classify_query(user_question: str) -> QueryClassification:
     orchestrator = get_orchestrator()
     return await orchestrator.classify_query(user_question)
 
-def process_query_with_routing(user_question: str) -> Dict[str, Any]:
+async def process_query_with_routing(user_question: str) -> Dict[str, Any]:
     """
     Convenience function for query processing using the global orchestrator.
     
@@ -458,7 +491,7 @@ def process_query_with_routing(user_question: str) -> Dict[str, Any]:
         Dict: Response from the selected search method
     """
     orchestrator = get_orchestrator()
-    return orchestrator.process_query_with_routing(user_question)
+    return await orchestrator.process_query_with_routing(user_question)
 
 def example_usage():
     """Example usage showing different query types"""
