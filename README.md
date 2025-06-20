@@ -60,10 +60,12 @@ A sophisticated legal document search engine powered by Azure AI Search, Azure O
      ```
      AZURE_SQL_CONNECTION_STRING=Driver={ODBC Driver 18 for SQL Server};Server=tcp:<your-server>.database.windows.net,1433;Database=<your-database>;Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30
      AZURE_SEARCH_ENDPOINT=https://<your-search-service>.search.windows.net
-     AZURE_SEARCH_ADMIN_KEY=<your-search-admin-key>
-     AZURE_SEARCH_INDEX_NAME=<your-index-name>
+     AZURE_SEARCH_KEY=<your-search-admin-key>
+     AZURE_SEARCH_INDEX=<your-index-name>
      AZURE_OPENAI_ENDPOINT=https://<your-openai-service>.openai.azure.com/
+     AZURE_FOUNDRY_PROJECT_ENDPOINT=<your-azure-foundry-project-endpoint-url> # Found in your Azure AI Foundry Project Overview page. 
      AZURE_OPENAI_API_KEY=<your-openai-key>
+     ENABLE_TRACING=false
      AZURE_OPENAI_EMBEDDING_DEPLOYMENT=<your-embedding-model-deployment-name>
      APPLICATIONINSIGHTS_CONNECTION_STRING=<your-app-insights-connection-string>
      ```

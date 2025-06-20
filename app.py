@@ -9,15 +9,18 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 import uvicorn
+import os
 
 
 # Initialize tracing first
-from tracing_setup import setup_tracing
-setup_tracing()
+ENABLE_TRACING = os.environ.get("ENABLE_TRACING")
+if ENABLE_TRACING and ENABLE_TRACING.lower() == "true":
+    from tracing_setup import setup_tracing
+    setup_tracing()
 
 
 # Import the orchestrator
-from orchestrator import process_query_with_routing
+from orchestrator_agent import process_query_with_routing
 
 
 app = FastAPI(
@@ -206,9 +209,9 @@ async def classify_query_endpoint(request: ChatRequest):
     Useful for debugging and understanding how queries are being classified.
     """
     try:
-        from orchestrator import classify_query
+        from orchestrator_agent import classify_query
         
-        classification = classify_query(request.question)
+        classification = await classify_query(request.question)
         
         return {
             "question": request.question,
@@ -221,7 +224,7 @@ async def classify_query_endpoint(request: ChatRequest):
         }
         
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Classification error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Classification error: {str(e)}\n {str(e.__traceback__)}")
 
 if __name__ == "__main__":
     print("🚀 Starting Legal Search Engine API with Intelligent Routing...")
