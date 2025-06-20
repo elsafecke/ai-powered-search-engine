@@ -45,6 +45,7 @@ async def shutdown_event():
 # Request model
 class ChatRequest(BaseModel):
     question: str
+    thread_id: Optional[str] = None # Optional thread ID for conversation context
 
 # Enhanced response models
 class Document(BaseModel):

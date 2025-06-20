@@ -262,18 +262,10 @@ class OrchestratorAgent:
                 role="user",  # Role of the message sender
                 content=classification_request,  # Message content
             )
-            # self.ai_client.agents.create_message(
-            #     thread_id=thread_id,
-            #     role="user",
-            #     content=classification_request
-            # )
             
             # Run the agent
             run = self.ai_client.agents.runs.create_and_process(thread_id=thread_id, agent_id=self.agent.id)
-            # run = self.ai_client.agents.create_and_process_run(
-            #     thread_id=thread_id,
-            #     assistant_id=self.agent.id
-            # )
+
             # Check if the run failed
             if run.status == "failed":
                 raise Exception(f"Run failed. Please check the agent configuration and try again: {str(run.last_error)}")
@@ -315,12 +307,6 @@ class OrchestratorAgent:
             
             print(f"📊 Classification: {classification.query_type.value} (confidence: {classification.confidence:.2f})")
             print(f"💭 Reasoning: {classification.reasoning}")
-            
-            # Clean up thread
-            # try:
-            #     self.ai_client.agents.threads.delete(thread_id=thread_id)
-            # except Exception as cleanup_error:
-            #     print(f"⚠️ Warning: Failed to cleanup thread: {cleanup_error}")
             
             return classification
             
