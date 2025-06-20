@@ -20,7 +20,7 @@ from azure.identity import DefaultAzureCredential
 from azure.core.exceptions import AzureError
 
 # Import your existing modules
-from simple_search import basic_search
+from simple_search_agent import basic_search_agent, cleanup_simple_search_agent
 from document_rag_agent import advanced_search, cleanup_rag_agent
 
 # Load environment variables
@@ -163,13 +163,19 @@ class OrchestratorAgent:
         """
         try:
             print("🧹 Starting orchestrator cleanup...")
-            
-            # Clean up the RAG agent first
+              # Clean up the RAG agent first
             try:
                 print("🧹 Cleaning up RAG agent...")
                 cleanup_rag_agent()
             except Exception as rag_error:
                 print(f"⚠️ Warning: Failed to cleanup RAG agent: {rag_error}")
+            
+            # Clean up the simple search agent
+            try:
+                print("🧹 Cleaning up simple search agent...")
+                cleanup_simple_search_agent()
+            except Exception as simple_error:
+                print(f"⚠️ Warning: Failed to cleanup simple search agent: {simple_error}")
             
             # Clean up the orchestrator agent
             if hasattr(self, 'agent') and self.agent:
@@ -371,8 +377,7 @@ class OrchestratorAgent:
         print("="*60)
         
         # Step 1: Classify the query using Azure AI Foundry agent
-        classification = await self.classify_query(user_question)
-        # Step 2: Route to appropriate handler based on classification
+        classification = await self.classify_query(user_question)        # Step 2: Route to appropriate handler based on classification
         try:
             if classification.query_type == QueryType.CLARIFICATION_NEEDED:
                 return {
@@ -387,7 +392,7 @@ class OrchestratorAgent:
                 
             elif classification.query_type == QueryType.BASIC_SEARCH:
                 print("📋 Routing to Basic Keyword Search with Filters...")
-                result = basic_search(user_question)
+                result = await basic_search_agent(user_question)
                 
                 # Transform basic search result to match expected format
                 return {
