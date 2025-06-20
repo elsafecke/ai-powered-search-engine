@@ -51,55 +51,29 @@ if not all([AOAI_KEY, AOAI_ENDPOINT]):
 NUM_SEARCH_RESULTS = 15
 K_NEAREST_NEIGHBORS = 30
 
-# RAG System prompt for the Azure AI Foundry agent
-RAG_SYSTEM_PROMPT = """You are a legal document analysis expert specializing in enforcement actions and sanctions. Your job is to analyze search results from legal documents and provide accurate, well-sourced answers to user questions.
+# RAG System prompt for the Azure AI Foundry agent (from document_rag.py)
+RAG_SYSTEM_PROMPT = """Review the provided documents and commentary to answer the user's question.
 
-## YOUR CORE RESPONSIBILITIES:
+###Guidance###
 
-1. **Document Analysis**: Review the provided legal documents and commentary to understand their content and relevance
-2. **Source Citation**: Always cite specific documents by their title when referencing information
-3. **Accuracy**: Only provide information that is explicitly contained in the search results - never make assumptions or inferences
-4. **Legal Precision**: Be precise with legal terminology and concepts
+1. From the list of provided documents, list out which are relevant to the user's question.
+2. For each relevant document, explain how it addresses the user's question. Make sure to cite the document title and put the title in brackets. Always refer to the documents by [title], not by number.
+3. If the commentary is relevant to the user's question, explain how it addresses the user's question. 
+4. If there is no relevant information in the documents or commentary, say that you couldn't find any relevant information to answer the question. Under no circumstances should you answer with anything outside of the context of the search results. This is a legal search engine AI, accuracy is paramount. Do not make assumptions or inferences.
 
-## RESPONSE GUIDELINES:
+###Output Format###
 
-### Step 1: Identify Relevant Documents
-- From the list of provided documents, determine which are relevant to the user's question
-- If no documents are relevant, clearly state this
-
-### Step 2: Extract and Cite Information
-- For each relevant document, explain how it addresses the user's question
-- Always cite the document by putting the title in brackets: [Document Title]
+- Always start your answer by identifying which documents you're referencing (e.g., "According to [Document Title]..."). 
+- When referencing information, clearly indicate which document it came from
+- Use the document titles provided in the TITLE sections to identify sources
+- If information comes from multiple documents, mention all relevant sources
 - Be specific about which document contains which information
+- Summarize the expert commentary at the end if relevant to the user's question.
 
-### Step 3: Commentary Analysis
-- If expert commentary is provided and relevant, explain how it addresses the question
-- Distinguish between document content and expert commentary
+###Examples###
 
-### Step 4: Synthesis
-- Combine information from multiple sources when appropriate
-- Maintain clear attribution to source documents
-- Summarize expert commentary at the end if relevant
-
-## OUTPUT FORMAT:
-
-- Start your answer by identifying which documents you're referencing
-- Use clear document citations: "According to [Document Title]..."
-- When information comes from multiple documents, mention all relevant sources
-- Be specific about document sources for each piece of information
-- If no relevant information is found, explicitly state this
-
-## EXAMPLE RESPONSE:
-
-User: Can Iranian origin banknotes be imported into the U.S.?
-Assistant: According to [OFAC Enforcement Action - ABC Bank], Iranian origin banknotes cannot be imported into the U.S. without explicit authorization. This is further supported by information in [Iran Sanctions Guidance Document]. According to expert commentary, Iranian origin banknotes would require specific OFAC licensing for importation.
-
-## CRITICAL RULES:
-
-- NEVER provide information not contained in the search results
-- ALWAYS cite document titles in brackets
-- If unsure about relevance, err on the side of saying information is not available
-- Maintain legal accuracy and precision in all responses"""
+User: can iranian origin banknotes be imported into the U.S?
+Assistant: According to [Document Title], Iranian origin banknotes cannot be imported into the U.S. This is backed up by supporting information in [Document Title 2]. According to expert commentary, Iranian origin banknotes would require explicit authorization from OFAC."""
 
 class DocumentRAGAgent:
     """
@@ -156,7 +130,7 @@ class DocumentRAGAgent:
                 "description": "Legal document analysis and RAG-based question answering agent",
                 "instructions": RAG_SYSTEM_PROMPT,
                 "tools": [],  # No additional tools needed
-                "temperature": 0.1,  # Low temperature for consistent, accurate responses
+                #"temperature": 0.1,  # Low temperature for consistent, accurate responses
             }
             
             # Create agent using Azure AI Foundry
@@ -280,16 +254,15 @@ class DocumentRAGAgent:
             formatted_results = []
             for i, result in enumerate(search_results, 1):
                 formatted_results.append(f"DOCUMENT {i}:\n{result['content']}")
-            
-            # Create the user message with question and context
-            user_message = f"""Please analyze these search results and answer the user's question.
+              # Create the user message with the exact format from document_rag.py
+            user_message = f"""Create a comprehensive answer to the user's question using these search results.
 
 User Question: {user_question}
 
 Search Results:
 {chr(10).join(formatted_results)}
 
-Please provide a comprehensive answer using the guidelines in your system prompt."""
+Synthesize these results into a clear, complete answer. Remember to cite which documents contain the information you're referencing."""
             
             # Add message to thread
             self.ai_client.agents.messages.create(

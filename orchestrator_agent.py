@@ -21,7 +21,7 @@ from azure.core.exceptions import AzureError
 
 # Import your existing modules
 from simple_search import basic_search
-from document_rag import advanced_search
+from document_rag_agent import advanced_search, cleanup_rag_agent
 
 # Load environment variables
 load_dotenv()
@@ -156,27 +156,33 @@ class OrchestratorAgent:
         except Exception as e:
             print(f"❌ Failed to initialize OrchestratorAgent: {e}")
             raise
-
     def cleanup(self):
         """
         Clean up resources including the agent.
         Should be called during application shutdown.
         """
         try:
-            print("🧹 Starting cleanup...")
+            print("🧹 Starting orchestrator cleanup...")
             
-            # Clean up the agent
+            # Clean up the RAG agent first
+            try:
+                print("🧹 Cleaning up RAG agent...")
+                cleanup_rag_agent()
+            except Exception as rag_error:
+                print(f"⚠️ Warning: Failed to cleanup RAG agent: {rag_error}")
+            
+            # Clean up the orchestrator agent
             if hasattr(self, 'agent') and self.agent:
                 try:
-                    print(f"🗑️ Cleaning up agent: {self.agent.id}")
+                    print(f"🗑️ Cleaning up orchestrator agent: {self.agent.id}")
                     self.ai_client.agents.delete_agent(self.agent.id)
                 except Exception as agent_error:
-                    print(f"⚠️ Warning: Failed to cleanup agent: {agent_error}")
+                    print(f"⚠️ Warning: Failed to cleanup orchestrator agent: {agent_error}")
             
-            print("✅ Cleanup completed successfully")
+            print("✅ Orchestrator cleanup completed successfully")
             
         except Exception as e:
-            print(f"❌ Error during cleanup: {e}")
+            print(f"❌ Error during orchestrator cleanup: {e}")
 
     def _create_or_get_agent(self):
         """
@@ -366,7 +372,6 @@ class OrchestratorAgent:
         
         # Step 1: Classify the query using Azure AI Foundry agent
         classification = await self.classify_query(user_question)
-        
         # Step 2: Route to appropriate handler based on classification
         try:
             if classification.query_type == QueryType.CLARIFICATION_NEEDED:
@@ -396,7 +401,7 @@ class OrchestratorAgent:
                 
             elif classification.query_type == QueryType.ADVANCED_SEARCH:
                 print("🔍 Routing to Advanced Document Search...")
-                result = advanced_search(user_question)
+                result = await advanced_search(user_question)
                 
                 # Enhance result with classification metadata
                 result["query_type"] = "advanced_search"
@@ -412,7 +417,7 @@ class OrchestratorAgent:
             else:
                 # Fallback to advanced search
                 print("⚠️ Unknown classification, defaulting to Advanced Document Search...")
-                result = advanced_search(user_question)
+                result = await advanced_search(user_question)
                 result["query_type"] = "advanced_search_fallback"
                 result["classification"] = classification.dict()
                 return result
