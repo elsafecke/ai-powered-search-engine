@@ -9,15 +9,18 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 import uvicorn
+import os
 
 
 # Initialize tracing first
-from tracing_setup import setup_tracing
-setup_tracing()
+ENABLE_TRACING = os.environ.get("ENABLE_TRACING")
+if ENABLE_TRACING and ENABLE_TRACING.lower() == "true":
+    from tracing_setup import setup_tracing
+    setup_tracing()
 
 
 # Import the orchestrator
-from orchestrator import process_query_with_routing
+from orchestrator_agent import process_query_with_routing, cleanup_orchestrator
 
 
 app = FastAPI(
@@ -26,9 +29,23 @@ app = FastAPI(
     version="2.0.0"
 )
 
+# Shutdown event handler for cleanup
+@app.on_event("shutdown")
+async def shutdown_event():
+    """
+    Clean up resources when the FastAPI application shuts down.
+    """
+    print("🛑 Application shutting down, cleaning up resources...")
+    try:
+        cleanup_orchestrator()
+        print("✅ Cleanup completed successfully")
+    except Exception as e:
+        print(f"❌ Error during shutdown cleanup: {e}")
+
 # Request model
 class ChatRequest(BaseModel):
     question: str
+    thread_id: Optional[str] = None # Optional thread ID for conversation context
 
 # Enhanced response models
 class Document(BaseModel):
@@ -98,7 +115,7 @@ async def chat_endpoint(request: ChatRequest):
         print(f"📝 Received question: {request.question}")
         
         # Use the orchestrator to process the query with intelligent routing
-        result = process_query_with_routing(request.question)
+        result = await process_query_with_routing(request.question)
         
         # Prepare documents list (handle different result formats)
         documents = []
@@ -206,9 +223,9 @@ async def classify_query_endpoint(request: ChatRequest):
     Useful for debugging and understanding how queries are being classified.
     """
     try:
-        from orchestrator import classify_query
+        from orchestrator_agent import classify_query
         
-        classification = classify_query(request.question)
+        classification = await classify_query(request.question)
         
         return {
             "question": request.question,
@@ -221,7 +238,24 @@ async def classify_query_endpoint(request: ChatRequest):
         }
         
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Classification error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Classification error: {str(e)}\n {str(e.__traceback__)}")
+
+# Admin endpoint for manual cleanup (useful for testing)
+@app.post("/admin/cleanup")
+async def manual_cleanup():
+    """
+    Manually trigger cleanup of orchestrator resources.
+    Useful for testing and administrative purposes.
+    """
+    try:
+        print("🧹 Manual cleanup requested...")
+        cleanup_orchestrator()
+        return {
+            "message": "Cleanup completed successfully",
+            "status": "success"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Cleanup error: {str(e)}")
 
 if __name__ == "__main__":
     print("🚀 Starting Legal Search Engine API with Intelligent Routing...")
