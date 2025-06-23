@@ -27,6 +27,8 @@ AZURE_FOUNDRY_PROJECT_ENDPOINT = os.environ.get("AZURE_FOUNDRY_PROJECT_ENDPOINT"
 if not AZURE_FOUNDRY_PROJECT_ENDPOINT:
     raise ValueError("AZURE_FOUNDRY_PROJECT_ENDPOINT environment variable is required")
 
+AOAI_SIMPLE_DEPLOYMENT = os.environ.get("AZURE_OPENAI_SIMPLE_DEPLOYMENT")
+
 class SearchParameters(BaseModel):
     """
     Pydantic model for structured search parameters.
@@ -139,7 +141,7 @@ Ensure all array fields are arrays (even if empty) and all field names match exa
             
             # Agent configuration
             agent_config = {
-                "model": "gpt-4o",  # Use GPT-4 for better parsing accuracy
+                "model": AOAI_SIMPLE_DEPLOYMENT,  # Use GPT-4 for better parsing accuracy
                 "name": "simple-search-parser",
                 "description": "Legal document search query parser for structured JSON outputs",
                 "instructions": enhanced_instructions,

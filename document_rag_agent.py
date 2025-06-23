@@ -43,6 +43,10 @@ if not all([AZURE_SEARCH_ENDPOINT, AZURE_SEARCH_KEY, AZURE_SEARCH_INDEX]):
 # Azure OpenAI configuration for embeddings
 AOAI_KEY = os.environ.get("AZURE_OPENAI_API_KEY")
 AOAI_ENDPOINT = os.environ.get("AZURE_OPENAI_ENDPOINT")
+AOAI_EMBEDDING_DEPLOYMENT = os.environ.get("AZURE_OPENAI_EMBEDDING_DEPLOYMENT")
+AOAI_REASONING_DEPLOYMENT = os.environ.get("AZURE_OPENAI_REASONING_DEPLOYMENT")
+
+
 
 if not all([AOAI_KEY, AOAI_ENDPOINT]):
     raise ValueError("Azure OpenAI environment variables are required")
@@ -101,7 +105,7 @@ class DocumentRAGAgent:
             
             # Initialize embeddings model
             self.embeddings_model = AzureOpenAIEmbeddings(
-                azure_deployment="text-embedding-3-large",
+                azure_deployment=AOAI_EMBEDDING_DEPLOYMENT,
                 api_key=AOAI_KEY,
                 azure_endpoint=AOAI_ENDPOINT
             )
@@ -125,7 +129,7 @@ class DocumentRAGAgent:
         try:
             # Agent configuration for o3-mini model
             agent_config = {
-                "model": "o3-mini",  # Use o3-mini as specified
+                "model": 'o3-mini',  # Use o3-mini as specified
                 "name": "document-rag-agent",
                 "description": "Legal document analysis and RAG-based question answering agent",
                 "instructions": RAG_SYSTEM_PROMPT,

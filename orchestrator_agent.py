@@ -11,6 +11,7 @@ This refactored version uses Azure AI Foundry agents for query classification in
 
 import os
 import json
+import asyncio
 from typing import Optional, Dict, Any
 from dotenv import load_dotenv
 from pydantic import BaseModel
@@ -30,6 +31,11 @@ load_dotenv()
 AZURE_FOUNDRY_PROJECT_ENDPOINT = os.environ.get("AZURE_FOUNDRY_PROJECT_ENDPOINT")
 if not AZURE_FOUNDRY_PROJECT_ENDPOINT:
     raise ValueError("AZURE_FOUNDRY_PROJECT_ENDPOINT environment variable is required")
+
+classification_llm_deployment = os.environ.get("AZURE_OPENAI_SIMPLE_DEPLOYMENT")
+reasoning_llm_deployment = os.environ.get("AZURE_OPENAI_REASONING_DEPLOYMENT")
+print(f"classification_llm_deployment: {classification_llm_deployment}")
+print(f"reasoning_llm_deployment: {reasoning_llm_deployment}")
 
 class QueryType(str, Enum):
     """Enumeration of supported query types"""
@@ -156,6 +162,7 @@ class OrchestratorAgent:
         except Exception as e:
             print(f"❌ Failed to initialize OrchestratorAgent: {e}")
             raise
+
     def cleanup(self):
         """
         Clean up resources including the agent.
@@ -163,7 +170,7 @@ class OrchestratorAgent:
         """
         try:
             print("🧹 Starting orchestrator cleanup...")
-              # Clean up the RAG agent first
+            # Clean up the RAG agent first
             try:
                 print("🧹 Cleaning up RAG agent...")
                 cleanup_rag_agent()
@@ -200,7 +207,7 @@ class OrchestratorAgent:
         try:
             # Agent configuration
             agent_config = {
-                "model": "gpt-4o",  # Use GPT-4 for better classification accuracy
+                "model": classification_llm_deployment,  # Use GPT-4 for better classification accuracy
                 "name": "query-classifier",
                 "description": "Legal document search query classification agent",
                 "instructions": ORCHESTRATOR_PROMPT,
@@ -233,15 +240,15 @@ class OrchestratorAgent:
         """
         try:
             if thread_id:
-                # Check if the thread exists
-                if thread_id and thread_id in self.threads:
-                    thread = self.threads[thread_id]
-                    print(f"✅ Using existing thread: {thread.id}")
-                    return thread.id
+                # For now, just create a new thread since we don't have thread persistence
+                # In a production system, you might want to implement thread persistence
+                print(f"📋 Note: Thread persistence not implemented, creating new thread")
+            
             # Create a new thread
             thread = self.ai_client.agents.threads.create()
             print(f"✅ Created new thread: {thread.id}")
             return thread.id
+            
         except AzureError as e:
             print(f"❌ Azure error getting/creating thread: {e}")
             raise
@@ -377,7 +384,9 @@ class OrchestratorAgent:
         print("="*60)
         
         # Step 1: Classify the query using Azure AI Foundry agent
-        classification = await self.classify_query(user_question)        # Step 2: Route to appropriate handler based on classification
+        classification = await self.classify_query(user_question)
+        
+        # Step 2: Route to appropriate handler based on classification
         try:
             if classification.query_type == QueryType.CLARIFICATION_NEEDED:
                 return {
@@ -489,7 +498,7 @@ async def process_query_with_routing(user_question: str) -> Dict[str, Any]:
     orchestrator = get_orchestrator()
     return await orchestrator.process_query_with_routing(user_question)
 
-def example_usage():
+async def example_usage():
     """Example usage showing different query types"""
     
     example_queries = [
@@ -517,7 +526,7 @@ def example_usage():
         print(f"Example Query: {query}")
         print("="*80)
         
-        result = orchestrator.process_query_with_routing(query)
+        result = await orchestrator.process_query_with_routing(query)
         
         print("\n📋 Result Summary:")
         print(f"Query Type: {result.get('query_type', 'unknown')}")
@@ -525,28 +534,22 @@ def example_usage():
             print(f"Confidence: {result['classification']['confidence']:.2f}")
             print(f"Reasoning: {result['classification']['reasoning']}")
 
-if __name__ == "__main__":
-    print("🎛️ Query Orchestrator Agent - Intelligent Routing with Azure AI Foundry")
+async def interactive_mode():
+    """Interactive mode for testing the orchestrator"""
+    print("\n" + "="*60) 
+    print("💬 Interactive Mode")
     print("="*60)
     
+    orchestrator = get_orchestrator()
+    
     try:
-        # Initialize orchestrator
-        orchestrator = get_orchestrator()
-        
-        # Run examples
-        # example_usage()
-        
-        print("\n" + "="*60) 
-        print("💬 Interactive Mode")
-        print("="*60)
-        
         while True:
             user_input = input("\n🔍 Enter your question (or 'quit' to exit): ")
             
             if user_input.lower() in ['quit', 'exit', 'q']:
                 break
                 
-            result = orchestrator.process_query_with_routing(user_input)
+            result = await orchestrator.process_query_with_routing(user_input)
             
             print(f"\n📊 Query Type: {result.get('query_type', 'unknown')}")
             if 'classification' in result:
@@ -558,8 +561,35 @@ if __name__ == "__main__":
             if result.get('query_type') == 'clarification_needed':
                 print(f"\n❓ Clarification needed: {result.get('clarification_question', '')}")
                 
+    except KeyboardInterrupt:
+        print("\n\n👋 Interrupted by user")
+    except Exception as e:
+        print(f"\n❌ Error in interactive mode: {e}")
+    finally:
+        # Always cleanup
+        cleanup_orchestrator()
+
+async def main():
+    """Main async function"""
+    print("🎛️ Query Orchestrator Agent - Intelligent Routing with Azure AI Foundry")
+    print("="*60)
+    
+    try:
+        # Initialize orchestrator
+        orchestrator = get_orchestrator()
+        
+        # Run examples (uncomment if desired)
+        # await example_usage()
+        
+        # Run interactive mode
+        await interactive_mode()
+        
     except Exception as e:
         print(f"❌ Failed to initialize orchestrator: {e}")
-        print("Please ensure AZURE_AI_PROJECT_CONNECTION_STRING is set correctly.")
-
+        print("Please ensure AZURE_FOUNDRY_PROJECT_ENDPOINT is set correctly.")
+    
     print("👋 Goodbye!")
+
+if __name__ == "__main__":
+    # Run the main async function
+    asyncio.run(main())
