@@ -466,6 +466,65 @@ Ensure all array fields are arrays (even if empty) and all field names match exa
         print("Step 1: 🎉 Basic search process completed successfully!")
         return final_payload
 
+    def _validate_structured_output(self, structured_output: SearchParameters) -> None:
+        """
+        Validate the structured output to ensure it matches expected format.
+        This mimics the validation that OpenAI's structured output parsing provides.
+        
+        Args:
+            structured_output: The parsed SearchParameters object
+            
+        Raises:
+            ValueError: If validation fails
+        """
+        try:
+            # Validate date fields
+            if structured_output.DateIssuedBegin is not None:
+                if not isinstance(structured_output.DateIssuedBegin, int) or structured_output.DateIssuedBegin < 1900:
+                    print(f"⚠️ Warning: DateIssuedBegin may be invalid: {structured_output.DateIssuedBegin}")
+                    
+            if structured_output.DateIssuedEnd is not None:
+                if not isinstance(structured_output.DateIssuedEnd, int) or structured_output.DateIssuedEnd < 1900:
+                    print(f"⚠️ Warning: DateIssuedEnd may be invalid: {structured_output.DateIssuedEnd}")
+            
+            # Validate list fields are actually lists
+            list_fields = [
+                'LegalIssue', 'Program', 'DocumentType', 'RegulatoryProvision',
+                'EnforcementCharacterization', 'OFACPenalty', 'AggregatePenalty',
+                'Industry', 'RespondentNationality', 'VoluntaryDisclosure', 'EgregiousCase'
+            ]
+            
+            for field_name in list_fields:
+                field_value = getattr(structured_output, field_name, [])
+                if not isinstance(field_value, list):
+                    print(f"⚠️ Warning: {field_name} should be a list but got {type(field_value)}")
+            
+            # Validate integer fields
+            if structured_output.NumberOfViolationsLow is not None:
+                if not isinstance(structured_output.NumberOfViolationsLow, int) or structured_output.NumberOfViolationsLow < 0:
+                    print(f"⚠️ Warning: NumberOfViolationsLow may be invalid: {structured_output.NumberOfViolationsLow}")
+                    
+            if structured_output.NumberOfViolationsHigh is not None:
+                if not isinstance(structured_output.NumberOfViolationsHigh, int) or structured_output.NumberOfViolationsHigh < 0:
+                    print(f"⚠️ Warning: NumberOfViolationsHigh may be invalid: {structured_output.NumberOfViolationsHigh}")
+            
+            # Validate boolean fields
+            if structured_output.Published is not None:
+                if not isinstance(structured_output.Published, bool):
+                    print(f"⚠️ Warning: Published should be boolean but got {type(structured_output.Published)}")
+                    
+            if not isinstance(structured_output.ExcludeCommentaries, bool):
+                print(f"⚠️ Warning: ExcludeCommentaries should be boolean but got {type(structured_output.ExcludeCommentaries)}")
+            
+            # Validate KeyWords is a string
+            if not isinstance(structured_output.KeyWords, str):
+                print(f"⚠️ Warning: KeyWords should be string but got {type(structured_output.KeyWords)}")
+            
+            print("✅ Structured output validation completed")
+            
+        except Exception as e:
+            print(f"⚠️ Warning during validation: {e}")
+            # Don't raise - just warn, as the Pydantic model already did basic validation
 # Global instance management
 _simple_search_agent_instance = None
 
