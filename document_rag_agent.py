@@ -64,6 +64,7 @@ RAG_SYSTEM_PROMPT = """Review the provided documents and commentary to answer th
 2. For each relevant document, explain how it addresses the user's question. Make sure to cite the document title and put the title in brackets. Always refer to the documents by [title], not by number.
 3. If the commentary is relevant to the user's question, explain how it addresses the user's question. 
 4. If there is no relevant information in the documents or commentary, say that you couldn't find any relevant information to answer the question. Under no circumstances should you answer with anything outside of the context of the search results. This is a legal search engine AI, accuracy is paramount. Do not make assumptions or inferences.
+5. For each document, include the ReferenceCount field (number of times the document is cited in the commentary) in your answer when describing the document. When determining the importance or relevance of a document, prioritize those with higher ReferenceCount values, as discussed by Brian. If you use information from a document, mention its ReferenceCount value in your explanation.
 
 ###Output Format###
 
@@ -73,11 +74,13 @@ RAG_SYSTEM_PROMPT = """Review the provided documents and commentary to answer th
 - If information comes from multiple documents, mention all relevant sources
 - Be specific about which document contains which information
 - Summarize the expert commentary at the end if relevant to the user's question.
+- When describing a document, include its ReferenceCount value (e.g., "[Document Title] (ReferenceCount: 12)")
+- When ranking or prioritizing documents, consider those with higher ReferenceCount as more important or relevant.
 
 ###Examples###
 
 User: can iranian origin banknotes be imported into the U.S?
-Assistant: According to [Document Title], Iranian origin banknotes cannot be imported into the U.S. This is backed up by supporting information in [Document Title 2]. According to expert commentary, Iranian origin banknotes would require explicit authorization from OFAC."""
+Assistant: According to [Document Title] (ReferenceCount: 12), Iranian origin banknotes cannot be imported into the U.S. This is backed up by supporting information in [Document Title 2] (ReferenceCount: 8). According to expert commentary, Iranian origin banknotes would require explicit authorization from OFAC."""
 
 class DocumentRAGAgent:
     """
@@ -192,7 +195,7 @@ class DocumentRAGAgent:
                 vector_queries=vector_queries,
                 select=["ID", "BrowserFile", "Title", "KeyFacts", "DocumentText", "Commentary", 
                         "DateIssued", "Published", "DocumentTypes", "NumberOfViolations", 
-                        "SettlementAmount", "SanctionPrograms", "Industries"],
+                        "SettlementAmount", "SanctionPrograms", "Industries", "ReferenceCount"],
                 top=NUM_SEARCH_RESULTS
             )
             
@@ -214,6 +217,10 @@ class DocumentRAGAgent:
                 if result.get("Commentary"):
                     content_parts.append(f"=== COMMENTARY ===\n{result['Commentary']}\n=== END COMMENTARY ===")
                 
+                # Add ReferenceCount to the content for prompt context
+                if result.get("ReferenceCount") is not None:
+                    content_parts.append(f"=== REFERENCE COUNT ===\n{result['ReferenceCount']}\n=== END REFERENCE COUNT ===")
+                
                 combined_content = "\n\n".join(content_parts)
                 
                 search_result = {
@@ -226,6 +233,7 @@ class DocumentRAGAgent:
                     "settlement_amount": result.get("SettlementAmount", ""),
                     "sanction_programs": result.get("SanctionPrograms", ""),
                     "industries": result.get("Industries", ""),
+                    "reference_count": result.get("ReferenceCount", None),
                     "score": result["@search.score"]
                 }
                 search_results.append(search_result)
