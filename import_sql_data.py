@@ -3,7 +3,6 @@ import pyodbc
 import csv
 import sys
 import struct
-import unicodedata
 from azure.identity import DefaultAzureCredential
 
 # Load environment variables from .env file
@@ -14,8 +13,8 @@ load_dotenv()
 conn_str_base = os.getenv('AZURE_SQL_CONNECTION_STRING')
 
 # CSV file path
-CSV_FILE = 'SRCExport.csv'
-table_name = 'EnforcementActionsFull2'
+CSV_FILE = 'sample_data_subset.csv'
+table_name = 'EnforcementActionsSubset'
 
 def get_azure_sql_token():
     """Get Azure AD access token for SQL Database"""
@@ -54,9 +53,6 @@ def validate_csv_file():
         with open(CSV_FILE, 'r', encoding='utf-8') as csvfile:
             reader = csv.reader(csvfile)
             headers = next(reader)
-            # Strip BOM from first header if present
-            if headers and headers[0].startswith('\ufeff'):
-                headers[0] = headers[0].replace('\ufeff', '')
             if not headers:
                 print("ERROR: CSV file appears to be empty")
                 return False
@@ -105,9 +101,8 @@ def create_or_truncate_table(cursor):
         cursor.execute(f'''
             CREATE TABLE {table_name} (
                 ID INT PRIMARY KEY,
-                Title NVARCHAR(MAX),
-                BrowserFile NVARCHAR(MAX),
-                Ordinal FLOAT NULL,
+                BrowserFile NVARCHAR(255),
+                Title NVARCHAR(255),
                 DateIssued DATETIME,
                 Published BIT,
                 DocumentTypes NVARCHAR(MAX),
@@ -116,14 +111,14 @@ def create_or_truncate_table(cursor):
                 Commentary NVARCHAR(MAX),
                 NumberOfViolations INT NULL,
                 SettlementAmount FLOAT NULL,
-                OfacPenalty NVARCHAR(MAX) NULL,
-                AggregatePenalty NVARCHAR(MAX) NULL,
-                BasePenalty NVARCHAR(MAX) NULL,
-                StatutoryMaximum NVARCHAR(MAX) NULL,
-                VSD NVARCHAR(MAX) NULL,
-                Egregious NVARCHAR(MAX) NULL,
-                WillfulOrReckless NVARCHAR(MAX) NULL,
-                Criminal NVARCHAR(MAX) NULL,
+                OfacPenalty NVARCHAR(50) NULL,
+                AggregatePenalty NVARCHAR(50) NULL,
+                BasePenalty NVARCHAR(50) NULL,
+                StatutoryMaximum NVARCHAR(50) NULL,
+                VSD NVARCHAR(10) NULL,
+                Egregious NVARCHAR(10) NULL,
+                WillfulOrReckless NVARCHAR(10) NULL,
+                Criminal NVARCHAR(10) NULL,
                 RegulatoryProvisions NVARCHAR(MAX) NULL,
                 LegalIssues NVARCHAR(MAX) NULL,
                 SanctionPrograms NVARCHAR(MAX) NULL,
@@ -134,106 +129,23 @@ def create_or_truncate_table(cursor):
             )
         ''')
 
-def deep_sanitize_string(val):
-    if not isinstance(val, str):
-        return val
-    # Remove all non-printable and control characters
-    val = ''.join(ch for ch in val if ch.isprintable() and not unicodedata.category(ch).startswith('C'))
-    # Remove BOM, non-breaking space, zero-width space, etc.
-    val = val.replace('\ufeff', '').replace('\xa0', '').replace('\u200b', '')
-    return val.strip()
-
 def prepare_batch_data(headers, rows):
-    """Prepare data for batch insert, ensuring all values are correct type for SQL Server columns"""
-    int_columns = {'ID', 'NumberOfViolations'}
-    float_columns = {'Ordinal', 'SettlementAmount'}
-    bit_columns = {'Published'}
-    datetime_columns = {'DateIssued'}
+    """Prepare data for batch insert"""
+    # Filter out empty column names
     filtered_headers = [col for col in headers if col.strip()]
     header_indices = [i for i, col in enumerate(headers) if col.strip()]
-
-    # Track invalid values for debug
-    invalid_values = {col: [] for col in int_columns | float_columns | bit_columns}
+    
+    # Prepare batch data
     batch_rows = []
-    for row_idx, row in enumerate(rows):
-        filtered_row = []
-        for idx, i in enumerate(header_indices):
-            col = filtered_headers[idx]
-            val = row[i]
-            if isinstance(val, str):
-                val = deep_sanitize_string(val)
-            if val == '':
-                filtered_row.append(None)
-            elif col in int_columns:
-                try:
-                    # Only accept int-like values
-                    if isinstance(val, int):
-                        filtered_row.append(val)
-                    elif isinstance(val, float) and val.is_integer():
-                        filtered_row.append(int(val))
-                    elif str(val).strip().isdigit():
-                        filtered_row.append(int(val))
-                    else:
-                        raise ValueError
-                except Exception:
-                    if len(invalid_values[col]) < 5:
-                        invalid_values[col].append((row_idx, val))
-                    filtered_row.append(None)
-            elif col in float_columns:
-                try:
-                    # Accept float-like values
-                    float_val = float(str(val).replace(',', '').replace('$', ''))
-                    filtered_row.append(float_val)
-                except Exception:
-                    if len(invalid_values[col]) < 5:
-                        invalid_values[col].append((row_idx, val))
-                    filtered_row.append(None)
-            elif col in bit_columns:
-                if val is None:
-                    filtered_row.append(None)
-                else:
-                    sval = str(val).strip().upper()
-                    if sval in ('1', 'TRUE', 'Y', 'YES'):
-                        filtered_row.append(1)
-                    elif sval in ('0', 'FALSE', 'N', 'NO'):
-                        filtered_row.append(0)
-                    else:
-                        if len(invalid_values[col]) < 5:
-                            invalid_values[col].append((row_idx, val))
-                        filtered_row.append(None)
-            elif col in datetime_columns:
-                if val is None or val == '':
-                    filtered_row.append(None)
-                else:
-                    filtered_row.append(str(val))
-            else:
-                filtered_row.append(str(val) if val is not None else None)
-        # Check row length matches header length
-        if len(filtered_row) != len(filtered_headers):
-            print(f"[ERROR] Row {row_idx} length {len(filtered_row)} does not match headers {len(filtered_headers)}")
-            print(f"Row: {filtered_row}")
+    for row in rows:
+        # Convert empty strings to None and filter by valid columns
+        filtered_row = [None if row[i] == '' else row[i] for i in header_indices]
         batch_rows.append(filtered_row)
-    # Print summary of invalid values
-    for col, vals in invalid_values.items():
-        if vals:
-            print(f"[WARN] First invalid values for column '{col}': {vals}")
-    # Print repr() of first 3 processed rows for hidden/invisible char debugging
-    print("[DEBUG] repr() of first 3 processed rows:")
-    for i, row in enumerate(batch_rows[:3]):
-        print(f"Row {i}: {[repr(x) for x in row]}")
+    
     return filtered_headers, batch_rows
 
-def print_unicode_debug(row):
-    print("[UNICODE DEBUG] Code points for each value in row:")
-    for idx, val in enumerate(row):
-        if isinstance(val, str):
-            codepoints = [f"U+{ord(c):04X}" for c in val]
-            print(f"  Col {idx}: {repr(val)} -> {codepoints}")
-        else:
-            print(f"  Col {idx}: {repr(val)} (type: {type(val)})")
-
 def batch_insert(cursor, headers, batch_rows):
-    """Insert multiple rows in a single batch, with debug info on error"""
+    """Insert multiple rows in a single batch"""
     if not batch_rows:
         return
     
@@ -243,35 +155,7 @@ def batch_insert(cursor, headers, batch_rows):
     columns = ','.join(f'[{col}]' for col in filtered_headers)
     sql = f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})"
     
-    cursor.fast_executemany = True  # Enable fast_executemany for much faster batch inserts
-    try:
-        cursor.executemany(sql, processed_rows)
-    except Exception as e:
-        print("\n--- BATCH INSERT ERROR DEBUG ---")
-        print(f"Headers: {filtered_headers}")
-        print(f"First row: {processed_rows[0] if processed_rows else 'EMPTY'}")
-        print(f"Types: {[type(x) for x in processed_rows[0]] if processed_rows else 'EMPTY'}")
-        print(f"repr() of first row: {[repr(x) for x in processed_rows[0]] if processed_rows else 'EMPTY'}")
-        print(f"Batch size: {len(processed_rows)}")
-        print(f"SQL: {sql}")
-        print(f"Exception: {e}")
-        if processed_rows:
-            print_unicode_debug(processed_rows[0])
-        print("--- END DEBUG ---\n")
-        raise
-
-def print_table_schema(cursor):
-    """Print the actual SQL Server table schema"""
-    print("\n--- SQL Server Table Schema ---")
-    cursor.execute(f"""
-        SELECT COLUMN_NAME, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH
-        FROM INFORMATION_SCHEMA.COLUMNS
-        WHERE TABLE_NAME = '{table_name}'
-    """)
-    rows = cursor.fetchall()
-    for row in rows:
-        print(f"{row[0]:30} {row[1]:15} {row[2]}")
-    print("--- END SCHEMA ---\n")
+    cursor.executemany(sql, processed_rows)
 
 def main():
     print('Validating prerequisites...')
@@ -300,7 +184,6 @@ def main():
         cursor = conn.cursor()
         create_or_truncate_table(cursor)
         conn.commit()
-        print_table_schema(cursor)  # Print the actual table schema before inserting
         
         # Import data in batches
         batch_size = 1000  # Process 1000 rows at a time
@@ -309,15 +192,9 @@ def main():
         
         with open(CSV_FILE, encoding='utf-8') as csvfile:
             reader = csv.reader(csvfile)
-            headers = next(reader)
-            # Strip BOM from first header if present
-            if headers and headers[0].startswith('\ufeff'):
-                headers[0] = headers[0].replace('\ufeff', '')
+            headers = next(reader)  # Get header
             
             for row in reader:
-                # Strip BOM from first value in each row if present
-                if row and row[0].startswith('\ufeff'):
-                    row[0] = row[0].replace('\ufeff', '')
                 batch_rows.append(row)
                 total_rows += 1
                 

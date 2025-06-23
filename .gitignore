@@ -194,8 +194,8 @@ cython_debug/
 .cursorindexingignore
 sample_data_subset.csv
 sample_data_full.csv
-
-#files
-*.csv
-*.xlsx
+SRCExport.xlsx
+full_data.csv
+prompts protected.py
+prompts.py
 prompts.py
