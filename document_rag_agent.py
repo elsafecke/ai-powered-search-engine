@@ -17,13 +17,6 @@ from azure.search.documents.models import VectorizedQuery
 from azure.core.credentials import AzureKeyCredential
 from langchain_openai import AzureOpenAIEmbeddings
 
-# Import tracing setup
-try:
-    from tracing_setup import setup_tracing
-except ImportError:
-    def setup_tracing():
-        pass
-
 # Load environment variables
 load_dotenv()
 
@@ -45,8 +38,6 @@ AOAI_KEY = os.environ.get("AZURE_OPENAI_API_KEY")
 AOAI_ENDPOINT = os.environ.get("AZURE_OPENAI_ENDPOINT")
 AOAI_EMBEDDING_DEPLOYMENT = os.environ.get("AZURE_OPENAI_EMBEDDING_DEPLOYMENT")
 AOAI_REASONING_DEPLOYMENT = os.environ.get("AZURE_OPENAI_REASONING_DEPLOYMENT")
-
-
 
 if not all([AOAI_KEY, AOAI_ENDPOINT]):
     raise ValueError("Azure OpenAI environment variables are required")
@@ -132,7 +123,7 @@ class DocumentRAGAgent:
         try:
             # Agent configuration for o3-mini model
             agent_config = {
-                "model": 'o3-mini',  # Use o3-mini as specified
+                "model": AOAI_REASONING_DEPLOYMENT,  # Use o3-mini as specified
                 "name": "document-rag-agent",
                 "description": "Legal document analysis and RAG-based question answering agent",
                 "instructions": RAG_SYSTEM_PROMPT,
@@ -426,7 +417,8 @@ if __name__ == "__main__":
     
     async def main():
         """Example usage of the Document RAG Agent"""
-        # Initialize tracing when running directly
+        # Initialize tracing when running directly (for standalone testing)
+        from tracing_setup import setup_tracing
         setup_tracing()
         
         # Get user question

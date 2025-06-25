@@ -5,23 +5,21 @@ FastAPI application with intelligent query routing using the orchestrator.
 Routes user questions to appropriate search methods based on query analysis.
 """
 
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-from typing import List, Dict, Any, Optional
-import uvicorn
 import os
 
-
-# Initialize tracing first
+# Initialize tracing FIRST at application level
 ENABLE_TRACING = os.environ.get("ENABLE_TRACING")
 if ENABLE_TRACING and ENABLE_TRACING.lower() == "true":
     from tracing_setup import setup_tracing
     setup_tracing()
 
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+from typing import List, Dict, Any, Optional
+import uvicorn
 
-# Import the orchestrator
+# Import the orchestrator AFTER tracing setup
 from orchestrator_agent import process_query_with_routing, cleanup_orchestrator
-
 
 app = FastAPI(
     title="Legal Search Engine API with Intelligent Routing",
@@ -238,7 +236,7 @@ async def classify_query_endpoint(request: ChatRequest):
         }
         
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Classification error: {str(e)}\n {str(e.__traceback__)}")
+        raise HTTPException(status_code=500, detail=f"Classification error: {str(e)}")
 
 # Admin endpoint for manual cleanup (useful for testing)
 @app.post("/admin/cleanup")

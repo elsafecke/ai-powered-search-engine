@@ -142,6 +142,8 @@ class OrchestratorAgent:
     def __init__(self):
         """Initialize the orchestrator agent with Azure AI Foundry client."""
         try:
+            print("🤖 Initializing OrchestratorAgent...")
+            
             # Use DefaultAzureCredential for authentication
             print("🔑 Using DefaultAzureCredential authentication")
             self.credential = DefaultAzureCredential()
@@ -573,6 +575,10 @@ async def main():
     """Main async function"""
     print("🎛️ Query Orchestrator Agent - Intelligent Routing with Azure AI Foundry")
     print("="*60)
+    
+    # Initialize tracing when running directly (for standalone testing)
+    from tracing_setup import setup_tracing
+    setup_tracing()
     
     try:
         # Initialize orchestrator
